@@ -9,7 +9,13 @@ Model dihasilkan oleh notebook:
 
 ## 1. Setup
 
+Disarankan menggunakan *virtual environment* sebelum menginstall dependensi:
+
 ```bash
+python -m venv venv
+venv\Scripts\activate      # Untuk Windows
+# source venv/bin/activate # Untuk Linux/Mac
+
 pip install -r requirements.txt
 ```
 
@@ -20,12 +26,14 @@ nama kelas, dan metadata training.
 ## 2. Jalankan server
 
 ```bash
-uvicorn chili_api:app --reload --port 8000
+uvicorn chili_api:app --reload --port 8080
 ```
 
-Server akan jalan di `http://localhost:8000`. Cek dengan buka
-`http://localhost:8000/health` di browser — kalau muncul `{"status": "ok", ...}`
+Server akan jalan di `http://localhost:8080`. Cek dengan buka
+`http://localhost:8080/health` di browser — kalau muncul `{"status": "ok", ...}`
 berarti model sudah berhasil dimuat.
+
+> **Catatan:** Port 8080 digunakan agar tidak bentrok dengan Laravel yang biasanya berjalan di port 8000. Pastikan frontend Anda mengarah ke URL ini.
 
 ## 3. Endpoint
 
@@ -44,7 +52,7 @@ async function predictDisease(imageFile) {
   const formData = new FormData();
   formData.append("file", imageFile);
 
-  const response = await fetch("http://localhost:8000/predict", {
+  const response = await fetch("http://localhost:8080/predict", {
     method: "POST",
     body: formData,
   });
