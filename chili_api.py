@@ -114,13 +114,14 @@ inference_transform = T.Compose([
 # ==========================================
 # FUNGSI ESTIMASI KEPARAHAN (HSV Segmentasi)
 # ==========================================
-def compute_diseased_ratio(img_rgb: np.ndarray) -> float:
+def compute_diseased_ratio(img_rgb: np.ndarray, predicted_class: str = "") -> float:
     """
     Hitung rasio area sakit terhadap total area daun menggunakan segmentasi warna HSV.
-    Metode ini identik dengan fungsi `diseased_ratio()` di notebook.
+    Warna (HSV Mask) yang dicari akan disesuaikan secara dinamis berdasarkan `predicted_class`.
 
     - Hijau (green) = daun sehat
-    - Coklat (brown) + Kuning (yellow) = lesi/area sakit
+    - Coklat (brown) / Kuning (yellow) = lesi/area sakit umum
+    - Putih (white) = area sakit untuk penyakit White Spot
     - Leaf area = green + diseased (background diabaikan)
 
     Returns:
@@ -129,12 +130,32 @@ def compute_diseased_ratio(img_rgb: np.ndarray) -> float:
     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
-    # Rentang warna HSV (sama persis dengan notebook)
+    # 1. Base Mask (Daun Sehat)
     green = cv2.inRange(hsv, (25, 40, 40), (95, 255, 255))
+    
+    # 2. Disease Masks
     brown = cv2.inRange(hsv, (5, 40, 30), (25, 255, 220))
     yellow = cv2.inRange(hsv, (26, 60, 60), (35, 255, 255))
+    # Putih: hue bebas, saturasi rendah (<60), kecerahan tinggi (>150)
+    white = cv2.inRange(hsv, (0, 0, 150), (180, 60, 255))
 
-    diseased = cv2.bitwise_or(brown, yellow)
+    # 3. Pilih Mask Berdasarkan Kelas Prediksi
+    pred_lower = predicted_class.lower()
+    
+    if "white" in pred_lower or "putih" in pred_lower:
+        # Penyakit White Spot (bercak abu/putih)
+        diseased = white
+    elif "curl" in pred_lower or "nutrition" in pred_lower:
+        # Virus keriting atau defisiensi nutrisi sering didominasi warna kuning (klorosis)
+        diseased = yellow
+    elif "cercospora" in pred_lower or "bacterial" in pred_lower:
+        # Bercak nekrotik dengan/tanpa halo kuning
+        diseased = cv2.bitwise_or(brown, yellow)
+    else:
+        # Fallback: gunakan kombinasi coklat, kuning, dan putih
+        diseased_by = cv2.bitwise_or(brown, yellow)
+        diseased = cv2.bitwise_or(diseased_by, white)
+
     leaf = cv2.bitwise_or(green, diseased)  # daun = sehat + lesi (abaikan background)
 
     leaf_area = int(np.count_nonzero(leaf))
@@ -246,7 +267,7 @@ async def predict(file: UploadFile = File(...)):
         severity_label = "Sehat"
     else:
         img_rgb = np.array(pil_img)
-        ratio = compute_diseased_ratio(img_rgb)
+        ratio = compute_diseased_ratio(img_rgb, predicted_class)
         severity_percent = round(ratio * 100, 2)
         severity_label = get_severity_label(ratio)
 
